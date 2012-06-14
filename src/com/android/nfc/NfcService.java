@@ -43,6 +43,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources.NotFoundException;
+import android.database.ContentObserver;
 import android.media.AudioManager;
 import android.media.SoundPool;
 import android.net.Uri;
@@ -90,6 +91,7 @@ public class NfcService implements DeviceHostListener {
     private static final String ACTION_MASTER_CLEAR_NOTIFICATION = "android.intent.action.MASTER_CLEAR_NOTIFICATION";
 
     static final boolean DBG = false;
+    private static final String KEY_NFC_POLLING_MODE = "nfc_polling_mode";
     static final String TAG = "NfcService";
 
     public static final String SERVICE_NAME = "nfc";
@@ -157,7 +159,7 @@ public class NfcService implements DeviceHostListener {
     static final int EE_ERROR_NFC_DISABLED = -6;
 
     /** minimum screen state that enables NFC polling (discovery) */
-    static final int POLLING_MODE = SCREEN_STATE_ON_UNLOCKED;
+    static int POLLING_MODE = SCREEN_STATE_ON_UNLOCKED;
 
     // Time to wait for NFC controller to initialize before watchdog
     // goes off. This time is chosen large, because firmware download
@@ -531,6 +533,8 @@ public class NfcService implements DeviceHostListener {
         }
 
         new EnableDisableTask().execute(TASK_BOOT);  // do blocking boot tasks
+
+        SettingsObserver mSettingsObserver = new SettingsObserver(new Handler());
     }
 
     void initSoundPool() {
@@ -2561,6 +2565,29 @@ public class NfcService implements DeviceHostListener {
             mNfcDispatcher.dump(fd, pw, args);
             pw.println(mDeviceHost.dump());
 
+        }
+    }
+
+    protected class SettingsObserver extends ContentObserver {
+        ContentResolver resolver;
+        SettingsObserver(Handler handler) {
+            super(handler);
+            resolver = mContext.getContentResolver();
+            observe();
+        }
+
+        void observe() {
+            resolver.registerContentObserver(Settings.System
+                    .getUriFor(Settings.System.NFC_POLLING_MODE),
+                    false, this);
+            POLLING_MODE = Settings.System.getInt(resolver,
+                    Settings.System.NFC_POLLING_MODE, SCREEN_STATE_ON_UNLOCKED);
+        }
+
+        @Override
+        public void onChange(boolean selfChange) {
+            POLLING_MODE = Settings.System.getInt(resolver,
+                    Settings.System.NFC_POLLING_MODE, SCREEN_STATE_ON_UNLOCKED);
         }
     }
 }
